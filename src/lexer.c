@@ -3,6 +3,11 @@
 #include "stdlib.h"
 #include "string.h"
 
+#define ALL_MODE 1
+#define ASCII_MODE 0
+
+// TODO: Handle lexing identifiers with keyword prefixes
+
 typedef enum {
     TOKEN_ID,          // generic Identifiers
     TOKEN_STR_LITERAL, // 'stuff'
@@ -29,10 +34,7 @@ typedef enum {
     TOKEN_POINTER,     // ^
     TOKEN_AT,          // @
     TOKEN_CHARACTER,   // #num or 'singlechar'
-    TOKEN_DEC,         // decnum
-    TOKEN_BIN,         // %binnum
-    TOKEN_HEX,         // $hexnum
-    TOKEN_OCTAL,       // &octnum
+    TOKEN_INTEGER,     // decnum
     TOKEN_REAL,        // 12345.999E20
     TOKEN_LS,          // <<
     TOKEN_RS,          // >>
@@ -95,7 +97,12 @@ typedef enum {
     TOKEN_SHL,
     TOKEN_END,
     TOKEN_NOT,
-    TOKEN_SHR
+    TOKEN_SHR,
+    TOKEN_DISPOSE,
+    TOKEN_FALSE,
+    TOKEN_TRUE,
+    TOKEN_EXIT,
+    TOKEN_NEW
 } TokenType;
 
 typedef struct {
@@ -238,33 +245,129 @@ Token *try_string_literal(char *input) {
 
 bool is_digit(char c) { return c >= 48 && c <= 57; }
 
-long to_num(char *num, int length) {
+bool is_oct_digit(char c) { return c >= 48 && c <= 55; }
+
+bool is_hex_digit(char c) { return (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102); }
+
+long to_num(char *num, int length, int base) {
     long power = 1;
     long ans = 0;
     
     for (int i = length - 1; i >= 0; i--) {
-	ans += power * (num[i] - 48);
-	power *= 10;
+	ans += power * (is_digit(num[i]) ? num[i] - 48 :
+			(num[i] >= 65 && num[i] <= 70 ? (num[i] - 55) :
+			 (num[i] - 87)));
+	power *= base;
     }
     
     return ans;
 }
 
-Token *try_integer_literal(char *input) {
+double read_decimal(char* num, int length) { return 0.0; }
+
+double read_scientific(char* num, int length) { return 0.0; }
+
+Token *try_decimal_literal_general(char *input, int mode) {
     if (!is_digit(input[0])) {
 	return NULL;
     }
-    
+
+    Token *ret_tok = malloc(sizeof(Token));
+
     int length = 1;
     
     while (is_digit(input[length])) {
 	length++;
     }
+
+    if (length > 0 && input[length] == '.' && mode == ALL_MODE) {
+	// attempt to scan float
+	if (is_digit(input[length + 1])) {
+	    length++;
+	    ret_tok->type = TOKEN_REAL;
+
+	    while (is_digit(input[length])) {
+		length++;
+	    }
+
+	    if (input[length] == 'E') {
+		length++;
+		while (is_digit(input[length])) {
+		    length++;
+		}
+		ret_tok->value.float_val = read_scientific(input, length);
+            } else {
+                ret_tok->value.float_val = read_decimal(input, length);
+            }
+	}
+    } else {
+	ret_tok->value.int_val = to_num(input, length, 10);
+	ret_tok->type = TOKEN_INTEGER;
+    }
     
-    Token *ret_tok = malloc(sizeof(Token));
-    ret_tok->value.int_val = to_num(input, length);
-    ret_tok->type = TOKEN_DEC;
     
+    return ret_tok;
+}
+
+Token *try_decimal_literal(char* input) { return try_decimal_literal_general(input, ALL_MODE); }
+
+Token *try_binary_int(char *input) {
+    if (input[0] != '%') { return NULL; }
+
+    int length = 0;
+
+    while (input[length + 1] == '0' || input[length + 1] == '1') {
+	length++;
+    }
+
+    Token* ret_tok = NULL;
+
+    if (length > 0) {
+	ret_tok = malloc(sizeof(Token));
+	ret_tok->type = TOKEN_INTEGER;
+	ret_tok->value.int_val = to_num(input, length, 2);
+    }
+
+    return ret_tok;
+}
+
+Token *try_oct_int(char *input) {
+    if (input[0] != '&') { return NULL; }
+
+    int length = 0;
+
+    while (is_oct_digit(input[length + 1])) {
+	length++;
+    }
+
+    Token* ret_tok = NULL;
+
+    if (length > 0) {
+	ret_tok = malloc(sizeof(Token));
+	ret_tok->type = TOKEN_INTEGER;
+	ret_tok->value.int_val = to_num(input, length, 8);
+    }
+
+    return ret_tok;
+}
+
+Token *try_hex_int(char *input) {
+    if (input[0] != '$') { return NULL; }
+
+    int length = 0;
+
+    while (is_hex_digit(input[length + 1])) {
+	length++;
+    }
+
+    Token* ret_tok = NULL;
+
+    if (length > 0) {
+	ret_tok = malloc(sizeof(Token));
+	ret_tok->type = TOKEN_INTEGER;
+	ret_tok->value.int_val = to_num(input, length, 16);
+    }
+
     return ret_tok;
 }
 
@@ -272,7 +375,8 @@ Token *try_char_ascii(char *input) {
     if (input[0] != '#') {
 	return NULL;
     }
-    Token *temp_num = try_integer_literal(input + 1);
+
+    Token *temp_num = try_decimal_literal_general(input + 1, ASCII_MODE);
     
     if (temp_num == NULL) {
 	return NULL;
@@ -358,16 +462,21 @@ Token *try_keywords(char *input) {
 	}
     }
     
-    // handle stuff that starts with d: 4 keywords
+    // handle stuff that starts with d: 5 keywords
     else if (input[0] == 'd') {
 	if (strncmp(input + 1, "estructor", 9) == 0) {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_DESTRUCTOR;
 	}
 	
-	else if (strncmp(input + 1, "iv", 2) == 0) {
-	    ret_tok = malloc(sizeof(Token));
-	    ret_tok->type = TOKEN_DIV;
+	else if (input[1] == 'i') {
+	    if (strncmp(input + 2, "spose", 5) == 0) {
+		ret_tok = malloc(sizeof(Token));
+		ret_tok->type = TOKEN_DISPOSE;
+            } else if (input[2] == 'v') {
+		ret_tok = malloc(sizeof(Token));
+		ret_tok->type = TOKEN_DIV;
+            }
 	}
 	
 	else if (input[1] == 'o') {
@@ -380,7 +489,7 @@ Token *try_keywords(char *input) {
 	}
     }
     
-    // handle stuff that starts with e: 2 keywords
+    // handle stuff that starts with e: 3 keywords
     else if (input[0] == 'e') {
 	if (strncmp(input + 1, "lse", 3) == 0) {
 	    ret_tok = malloc(sizeof(Token));
@@ -391,11 +500,20 @@ Token *try_keywords(char *input) {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_END;
 	}
+
+	else if (strncmp(input + 1, "xit", 2) == 0) {
+	    ret_tok = malloc(sizeof(Token));
+	    ret_tok->type = TOKEN_EXIT;
+	}
     }
     
-    // handle stuff that starts with f: 3 keywords
+    // handle stuff that starts with f: 4 keywords
     else if (input[0] == 'f') {
-	if (strncmp(input + 1, "ile", 3) == 0) {
+	if (strncmp(input + 1, "alse", 4) == 0) {
+	    ret_tok = malloc(sizeof(Token));
+	    ret_tok->type = TOKEN_FALSE;
+	}
+	else if (strncmp(input + 1, "ile", 3) == 0) {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_FILE;
 	} else if (strncmp(input + 1, "or", 2) == 0) {
@@ -447,9 +565,12 @@ Token *try_keywords(char *input) {
 	ret_tok->type = TOKEN_MOD;
     }
     
-    // handle stuff that starts with n: 2 keywords
+    // handle stuff that starts with n: 3 keywords
     else if (input[0] == 'n') {
-	if (strncmp(input + 1, "il", 2) == 0) {
+	if (strncmp(input + 1, "ew", 2) == 0) {
+	    ret_tok = malloc(sizeof(Token));
+	    ret_tok->type = TOKEN_NEW;
+	} else if (strncmp(input + 1, "il", 2) == 0) {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_NIL;
 	} else if (strncmp(input + 1, "ot", 2) == 0) {
@@ -535,7 +656,7 @@ Token *try_keywords(char *input) {
 	}
     }
     
-    // handle stuff that starts with t: 3 keywords
+    // handle stuff that starts with t: 4 keywords
     else if (input[0] == 't') {
 	if (strncmp(input + 1, "hen", 3) == 0) {
 	    ret_tok = malloc(sizeof(Token));
@@ -544,7 +665,9 @@ Token *try_keywords(char *input) {
 	} else if (input[1] == 'o') {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_TO;
-	    
+        } else if (strncmp(input + 1, "rue", 3) == 0) {
+	    ret_tok = malloc(sizeof(Token));
+	    ret_tok->type = TOKEN_TRUE;
 	} else if (strncmp(input + 1, "ype", 3) == 0) {
 	    ret_tok = malloc(sizeof(Token));
 	    ret_tok->type = TOKEN_TYPE;
@@ -627,10 +750,9 @@ Token *next_token(char *input) {
     Token *ret_tok;
     
     Token *(*recognizers[])(char *) = {
-	&try_ops,    &try_char_ascii, &try_string_literal, &try_integer_literal,
-	&try_delims, &try_keywords,   &try_identifier};
+	&try_ops, &try_delims, &try_keywords, &try_identifier, &try_string_literal, &try_decimal_literal, &try_char_ascii, &try_binary_int, &try_hex_int, &try_oct_int};
     
-    int NUM_RECOGS = 7;
+    int NUM_RECOGS = 10;
     
     for (int i = 0; i < NUM_RECOGS; i++) {
 	ret_tok = (*recognizers[i])(input);

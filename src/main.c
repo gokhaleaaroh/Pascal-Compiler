@@ -1,7 +1,7 @@
 #include "./lexer.c"
 #include <stdio.h>
 
-static char* typenames[] = {"ID", "STR_LITERAL", "PLUS", "MINUS", "TIMES", "DIVIDE", "EQ", "LT", "GT", "LE", "GE", "NE", "OPEN_BRACK", "CLOSE_BRACK", "DOT", "COMMA", "OPEN_PAREN", "CLOSE_PAREN", "COLON", "ASSIGN", "POINTER", "AT", "CHARACTER", "DEC", "BIN", "HEX", "OCTAL", "REAL", "LS", "RS", "PE", "ME", "TE", "DE", "RANGE", "ABSOLUTE", "FILE", "OBJECT", "STRING", "AND", "FOR", "OF", "THEN", "ARRAY", "FUNCTION", "OPERATOR", "TO", "ASM", "GOTO", "OR", "TYPE", "BEGIN", "IF", "PACKED", "UNIT", "CASE", "IMPLEMENTATION", "PROCEDURE", "UNTIL", "CONST", "IN", "PROGRAM", "USES", "CONSTRUCTOR", "INHERITED", "RECORD", "VAR", "DESTRUCTOR", "INLINE", "REINTRODUCE", "WHILE", "DIV", "INTERFACE", "REPEAT", "WITH", "DO", "LABEL", "SELF", "XOR", "DOWNTO", "MOD", "SET", "ELSE", "NIL", "SHL", "END", "NOT", "SHR"};
+static char* typenames[] = {"ID", "STR_LITERAL", "PLUS", "MINUS", "TIMES", "DIVIDE", "EQ", "LT", "GT", "LE", "GE", "NE", "OPEN_BRACK", "CLOSE_BRACK", "DOT", "COMMA", "OPEN_PAREN", "CLOSE_PAREN", "COLON", "ASSIGN", "POINTER", "AT", "CHARACTER", "DEC", "BIN", "HEX", "OCTAL", "REAL", "LS", "RS", "PE", "ME", "TE", "DE", "RANGE", "ABSOLUTE", "FILE", "OBJECT", "STRING", "AND", "FOR", "OF", "THEN", "ARRAY", "FUNCTION", "OPERATOR", "TO", "ASM", "GOTO", "OR", "TYPE", "BEGIN", "IF", "PACKED", "UNIT", "CASE", "IMPLEMENTATION", "PROCEDURE", "UNTIL", "CONST", "IN", "PROGRAM", "USES", "CONSTRUCTOR", "INHERITED", "RECORD", "VAR", "DESTRUCTOR", "INLINE", "REINTRODUCE", "WHILE", "DIV", "INTERFACE", "REPEAT", "WITH", "DO", "LABEL", "SELF", "XOR", "DOWNTO", "MOD", "SET", "ELSE", "NIL", "SHL", "END", "NOT", "SHR", "DISPOSE", "FALSE", "TRUE", "EXIT", "NEW"};
 
 
 void print_token(Token *tk) {
